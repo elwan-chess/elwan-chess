@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#d4af37">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Elwan Chess">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="elwan_cover.jpg">
+<title>Elwan Chess</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { background: #1a1a2e; color: #fff; font-family: 'Segoe UI', Arial, sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; overflow-x: hidden; }
+
+  /* شاشة الغلاف */
+  #splash { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a15; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; transition: opacity 0.8s; cursor: pointer; }
+  #splash.hide { opacity: 0; pointer-events: none; }
+  #splash img { width: 90%; max-width: 500px; border-radius: 12px; box-shadow: 0 0 40px rgba(212, 175, 55, 0.5); animation: fadeIn 1.5s ease-in; }
+  #splash h1 { color: #d4af37; margin-top: 20px; font-size: 28px; text-shadow: 0 0 20px rgba(212, 175, 55, 0.8); }
+  #splash p { color: #aaa; margin-top: 10px; font-size: 14px; animation: pulse 1.5s infinite; }
+  @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+  @keyframes pulse { 50% { opacity: 0.5; } }
+
+  /* الشريط العلوي */
+  .top-bar { width: 100%; background: #16213e; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #d4af37; position: sticky; top: 0; z-index: 100; }
+  .top-bar h1 { color: #d4af37; font-size: 18px; }
+  .icon-btn { background: #0f3460; border: 1px solid #d4af37; color: #d4af37; width: 36px; height: 36px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+  /* شريط اللاعب */
+  .player-bar { width: min(95vw, 480px); background: #0f3460; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; border-radius: 10px; margin: 6px 0; border: 1px solid #1a5490; transition: 0.3s; }
+  .player-bar.active { border: 2px solid #d4af37; box-shadow: 0 0 15px rgba(212, 175, 55, 0.5); }
+  .player-info { display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: #d4af37; display: flex; align-items: center; justify-content: center; font-size: 22px; border: 2px solid #fff; }
+  .player-name { font-weight: bold; font-size: 14px; }
+  .player-rating { font-size: 11px; color: #aaa; }
+  .timer { background: #0a0a15; padding: 6px 12px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 16px; font-weight: bold; color: #4ade80; min-width: 70px; text-align: center; }
+  .timer.warning { color: #fbbf24; }
+  .timer.danger { color: #ef4444; animation: pulse 1s infinite; }
+
+  /* اللوحة */
+  .board-wrapper { position: relative; width: min(95vw, 480px); aspect-ratio: 1; background: #d4af37; padding: 3px; border-radius: 6px; }
+  #board { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); width: 100%; height: 100%; position: relative; }
+  .square { display: flex; align-items: center; justify-content: center; font-size: min(8vw, 38px); cursor: pointer; user-select: none; position: relative; transition: background 0.15s; }
+  .light { background: #f0d9b5; }
+  .dark { background: #b58863; }
+  .selected { box-shadow: inset 0 0 0 4px #d4af37; }
+  .possible-move::after { content: ''; position: absolute; width: 30%; height: 30%; background: rgba(76, 175, 80, 0.6); border-radius: 50%; pointer-events: none; }
+  .possible-capture::after { content: ''; position: absolute; width: 90%; height: 90%; border: 4px solid rgba(244, 67, 54, 0.7); border-radius: 50%; pointer-events: none; }
+  .last-move { background: rgba(255, 235, 59, 0.5) !important; }
+  .in-check { background: rgba(244, 67, 54, 0.7) !important; }
+  .piece { font-size: min(9vw, 42px); line-height: 1; pointer-events: none; position: relative; z-index: 2; }
+  .piece-white { color: #fff; text-shadow: 1px 1px 2px #000, -1px -1px 2px #000, 1px -1px 2px #000, -1px 1px 2px #000; }
+  .piece-black { color: #111; text-shadow: 1px 1px 0 #888; }
+  .coord-file, .coord-rank { position: absolute; font-size: 10px; font-weight: bold; color: #6b4423; pointer-events: none; z-index: 1; }
+  .coord-file { bottom: 2px; right: 3px; }
+  .coord-rank { top: 2px; left: 3px; }
+
+  /* شريط الأدوات */
+  .toolbar { width: min(95vw, 480px); display: flex; justify-content: space-around; margin: 10px 0; gap: 6px; }
+  .tool-btn { background: #0f3460; border: 1px solid #d4af37; color: #d4af37; padding: 10px; border-radius: 10px; font-size: 18px; cursor: pointer; flex: 1; transition: 0.2s; }
+  .tool-btn:active { background: #d4af37; color: #0f3460; }
+
+  /* إعلان الفائز */
+  #winner-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 500; }
+  #winner-overlay.show { display: flex; }
+  #winner-overlay h2 { color: #d4af37; font-size: 36px; margin-bottom: 20px; text-shadow: 0 0 30px rgba(212, 175, 55, 0.8); }
+  #winner-overlay p { color: #fff; font-size: 20px; margin-bottom: 30px; }
+  .play-again { background: #d4af37; border: none; color: #0a0a15; padding: 14px 30px; border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; }
+
+  /* رسالة */
+  #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: #16213e; color: #d4af37; padding: 12px 24px; border-radius: 10px; border: 1px solid #d4af37; font-weight: bold; transition: 0.3s; z-index: 400; opacity: 0; }
+  #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  /* الإعدادات */
+  #settings-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: none; align-items: center; justify-content: center; z-index: 600; padding: 20px; }
+  #settings-overlay.show { display: flex; }
+  .settings-box { background: #16213e; padding: 25px; border-radius: 15px; border: 2px solid #d4af37; max-width: 400px; width: 100%; text-align: center; }
+  .settings-box h3 { color: #d4af37; margin-bottom: 20px; }
+  .settings-btn { display: block; width: 100%; background: #0f3460; border: 1px solid #d4af37; color: #fff; padding: 14px; border-radius: 10px; font-size: 16px; margin: 8px 0; cursor: pointer; font-weight: bold; }
+  .settings-btn.selected { background: #d4af37; color: #0a0a15; }
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <img src="elwan_cover.jpg" alt="Elwan Chess" onerror="this.style.display='none'">
+  <h1>♛ Elwan Chess ♛</h1>
+  <p>اضغط للبدء</p>
+</div>
+
+<div class="top-bar">
+  <button class="icon-btn" onclick="openSettings()">☰</button>
+  <h1>♛ Elwan Chess</h1>
+  <button class="icon-btn" onclick="resetGame()">↻</button>
+</div>
+
+<div class="player-bar" id="top-player">
+  <div class="player-info">
+    <div class="avatar" id="top-avatar">🤖</div>
+    <div>
+      <div class="player-name" id="top-name">الكمبيوتر</div>
+      <div class="player-rating" id="top-rating">(1200)</div>
+    </div>
+  </div>
+  <div class="timer" id="top-timer">10:00</div>
+</div>
+
+<div class="board-wrapper">
+  <div id="board"></div>
+</div>
+
+<div class="player-bar active" id="bottom-player">
+  <div class="player-info">
+    <div class="avatar" id="bottom-avatar">👑</div>
+    <div>
+      <div class="player-name">Elwan</div>
+      <div class="player-rating">(1000)</div>
+    </div>
+  </div>
+  <div class="timer" id="bottom-timer">10:00</div>
+</div>
+
+<div class="toolbar">
+  <button class="tool-btn" onclick="resetGame()">🔄</button>
+  <button class="tool-btn" onclick="hint()">💡</button>
+  <button class="tool-btn" onclick="toggleMode()" id="mode-btn">🤖</button>
+</div>
+
+<div id="settings-overlay">
+  <div class="settings-box">
+    <h3>⚙️ إعدادات اللعبة</h3>
+    <p style="color: #aaa; margin-bottom: 15px;">اختر وضع اللعب:</p>
+    <button class="settings-btn" id="btn-1player" onclick="setMode('1player')">🤖 لاعب واحد (ضد الكمبيوتر)</button>
+    <button class="settings-btn" id="btn-2player" onclick="setMode('2player')">👥 لاعبين (نفس الجهاز)</button>
+    <button class="settings-btn" onclick="closeSettings()" style="background: #444; margin-top: 15px;">❌ إغلاق</button>
+  </div>
+</div>
+
+<div id="winner-overlay">
+  <h2 id="winner-title">CHECKMATE!</h2>
+  <p id="winner-text">فاز اللاعب الأبيض!</p>
+  <button class="play-again" onclick="resetGame()">🔄 لعبة جديدة</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const symbols = {
+  'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+  'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+};
+
+const initialBoard = [
+  ['r','n','b','q','k','b','n','r'],
+  ['p','p','p','p','p','p','p','p'],
+  ['','','','','','','',''],
+  ['','','','','','','',''],
+  ['','','','','','','',''],
+  ['','','','','','','',''],
+  ['P','P','P','P','P','P','P','P'],
+  ['R','N','B','Q','K','B','N','R']
+];
+
+const pieceValues = { 'p': 10, 'n': 30, 'b': 30, 'r': 50, 'q': 90, 'k': 10000 };
+
+let board = JSON.parse(JSON.stringify(initialBoard));
+let selected = null;
+let turn = 'white';
+let lastMove = null;
+let gameMode = '1player';
+let gameOver = false;
+let whiteTime = 600;
+let blackTime = 600;
+let timerInterval = null;
+let currentTimer = 'white';
+
+// ===== نظام الأصوات =====
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function playTone(freq, dur, type, vol) {
+  if (!audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(vol || 0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + dur);
+  } catch(e) {}
+}
+function soundMove() { playTone(600, 0.08, 'sine', 0.12); setTimeout(() => playTone(800, 0.06, 'sine', 0.10), 50); }
+function soundCapture() { playTone(300, 0.12, 'square', 0.15); setTimeout(() => playTone(200, 0.15, 'square', 0.12), 70); }
+function soundCheck() { playTone(1000, 0.12, 'triangle', 0.18); setTimeout(() => playTone(1200, 0.12, 'triangle', 0.18), 100); setTimeout(() => playTone(1000, 0.15, 'triangle', 0.18), 200); }
+function soundWin() { playTone(523, 0.18, 'sine', 0.2); setTimeout(() => playTone(659, 0.18, 'sine', 0.2), 180); setTimeout(() => playTone(784, 0.18, 'sine', 0.2), 360); setTimeout(() => playTone(1047, 0.35, 'sine', 0.25), 540); }
+function soundLose() { playTone(392, 0.22, 'sine', 0.2); setTimeout(() => playTone(330, 0.22, 'sine', 0.2), 220); setTimeout(() => playTone(262, 0.45, 'sine', 0.2), 440); }
+
+// ===== شاشة الغلاف =====
+document.getElementById('splash').addEventListener('click', function() {
+  initAudio();
+  this.classList.add('hide');
+  setTimeout(() => { this.style.display = 'none'; }, 800);
+  startTimer();
+});
+
+// ===== رسم اللوحة =====
+function drawBoard() {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  const inCheckPos = findKingInCheck(turn);
+
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const sq = document.createElement('div');
+      sq.className = 'square ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+      sq.dataset.r = r;
+      sq.dataset.c = c;
+
+      if (r === 7) {
+        const fl = document.createElement('span');
+        fl.className = 'coord-file';
+        fl.textContent = 'abcdefgh'[c];
+        sq.appendChild(fl);
+      }
+      if (c === 0) {
+        const rl = document.createElement('span');
+        rl.className = 'coord-rank';
+        rl.textContent = 8 - r;
+        sq.appendChild(rl);
+      }
+      if (lastMove && ((lastMove.from[0] === r && lastMove.from[1] === c) || (lastMove.to[0] === r && lastMove.to[1] === c))) {
+        sq.classList.add('last-move');
+      }
+      if (inCheckPos && inCheckPos[0] === r && inCheckPos[1] === c) sq.classList.add('in-check');
+      if (selected && selected[0] === r && selected[1] === c) sq.classList.add('selected');
+      if (selected) {
+        const moves = getPossibleMoves(selected[0], selected[1]);
+        if (moves.some(m => m[0] === r && m[1] === c)) {
+          sq.classList.add(board[r][c] ? 'possible-capture' : 'possible-move');
+        }
+      }
+
+      const piece = board[r][c];
+      if (piece) {
+        const span = document.createElement('span');
+        span.textContent = symbols[piece];
+        span.className = 'piece ' + (piece === piece.toUpperCase() ? 'piece-white' : 'piece-black');
+        sq.appendChild(span);
+      }
+
+      sq.onclick = () => handleClick(r, c);
+      boardEl.appendChild(sq);
+    }
+  }
+  updatePlayerBars();
+}
+
+// ===== الضغط =====
+function handleClick(r, c) {
+  if (gameOver) return;
+  initAudio();
+  if (gameMode === '1player' && turn === 'black') return;
+
+  const piece = board[r][c];
+
+  if (selected) {
+    const [sr, sc] = selected;
+    const moves = getPossibleMoves(sr, sc);
+    const isValid = moves.some(m => m[0] === r && m[1] === c);
+
+    if (isValid) {
+      makeMove(sr, sc, r, c);
+      selected = null;
+      drawBoard();
+
+      const opponent = turn === 'white' ? 'black' : 'white';
+      if (isCheckmate(opponent)) { endGame(turn, 'كش مات!'); return; }
+      if (isStalemate(opponent)) { endGame(null, 'تعادل - لا توجد حركات'); return; }
+
+      if (gameMode === '1player' && turn === 'black') {
+        setTimeout(computerMove, 400);
+      }
+      return;
+    }
+
+    if (piece) {
+      const isWhite = piece === piece.toUpperCase();
+      if ((turn === 'white' && isWhite) || (turn === 'black' && !isWhite)) {
+        selected = [r, c];
+        drawBoard();
+        return;
+      }
+    }
+    selected = null;
+    drawBoard();
+    return;
+  }
+
+  if (piece) {
+    const isWhite = piece === piece.toUpperCase();
+    if ((turn === 'white' && isWhite) || (turn === 'black' && !isWhite)) {
+      selected = [r, c];
+      drawBoard();
+    }
+  }
+}
+
+// ===== تنفيذ الحركة =====
+function makeMove(sr, sc, r, c) {
+  const moving = board[sr][sc];
+  const captured = board[r][c];
+
+  if (captured) soundCapture(); else soundMove();
+
+  if (moving === 'P' && r === 0) board[r][c] = 'Q';
+  else if (moving === 'p' && r === 7) board[r][c] = 'q';
+  else board[r][c] = moving;
+  board[sr][sc] = '';
+
+  lastMove = { from: [sr, sc], to: [r, c] };
+  turn = turn === 'white' ? 'black' : 'white';
+  currentTimer = turn;
+
+  if (isInCheck(turn)) {
+    showToast('⚠️ كش!');
+    setTimeout(soundCheck, 100);
+  }
+}
+
+// ===== الحركات الممكنة =====
+function getPossibleMoves(r, c) {
+  const piece = board[r][c];
+  if (!piece) return [];
+  const isWhite = piece === piece.toUpperCase();
+  const moves = [];
+  const type = piece.toLowerCase();
+
+  const addMove = (nr, nc) => {
+    if (nr < 0 || nr > 7 || nc < 0 || nc > 7) return false;
+    const t = board[nr][nc];
+    if (!t) { moves.push([nr, nc]); return true; }
+    if ((t === t.toUpperCase()) !== isWhite) moves.push([nr, nc]);
+    return false;
+  };
+  const slide = (dirs) => {
+    for (const [dr, dc] of dirs) {
+      let nr = r + dr, nc = c + dc;
+      while (nr >= 0 && nr <= 7 && nc >= 0 && nc <= 7) {
+        if (!addMove(nr, nc)) break;
+        nr += dr; nc += dc;
+      }
+    }
+  };
+
+  if (type === 'p') {
+    const dir = isWhite ? -1 : 1;
+    const start = isWhite ? 6 : 1;
+    if (r + dir >= 0 && r + dir <= 7 && !board[r + dir][c]) {
+      moves.push([r + dir, c]);
+      if (r === start && !board[r + 2 * dir][c]) moves.push([r + 2 * dir, c]);
+    }
+    for (const dc of [-1, 1]) {
+      const nr = r + dir, nc = c + dc;
+      if (nr >= 0 && nr <= 7 && nc >= 0 && nc <= 7) {
+        const t = board[nr][nc];
+        if (t && (t === t.toUpperCase()) !== isWhite) moves.push([nr, nc]);
+      }
+    }
+  } else if (type === 'n') {
+    for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) addMove(r + dr, c + dc);
+  } else if (type === 'b') slide([[-1,-1],[-1,1],[1,-1],[1,1]]);
+  else if (type === 'r') slide([[-1,0],[1,0],[0,-1],[0,1]]);
+  else if (type === 'q') slide([[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]);
+  else if (type === 'k') {
+    for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) addMove(r + dr, c + dc);
+  }
+
+  return moves.filter(([nr, nc]) => {
+    const temp = board[nr][nc];
+    board[nr][nc] = piece; board[r][c] = '';
+    const inCheck = isInCheck(isWhite ? 'white' : 'black');
+    board[r][c] = piece; board[nr][nc] = temp;
+    return !inCheck;
+  });
+}
+
+// ===== فحص الكش =====
+function isInCheck(color) {
+  const king = color === 'white' ? 'K' : 'k';
+  let kr = -1, kc = -1;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (board[r][c] === king) { kr = r; kc = c; }
+  if (kr === -1) return false;
+  const enemyWhite = color !== 'white';
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = board[r][c];
+    if (!p || (p === p.toUpperCase()) !== enemyWhite) continue;
+    if (canAttack(r, c, kr, kc, p)) return true;
+  }
+  return false;
+}
+function findKingInCheck(color) {
+  if (!isInCheck(color)) return null;
+  const king = color === 'white' ? 'K' : 'k';
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (board[r][c] === king) return [r, c];
+  return null;
+}
+function canAttack(r, c, tr, tc, piece) {
+  const isW = piece === piece.toUpperCase();
+  const type = piece.toLowerCase();
+  const dr = tr - r, dc = tc - c;
+  const adr = Math.abs(dr), adc = Math.abs(dc);
+  if (type === 'p') { const dir = isW ? -1 : 1; return dr === dir && adc === 1; }
+  if (type === 'n') return (adr === 2 && adc === 1) || (adr === 1 && adc === 2);
+  if (type === 'b') return adr === adc && pathClear(r, c, tr, tc);
+  if (type === 'r') return (dr === 0 || dc === 0) && pathClear(r, c, tr, tc);
+  if (type === 'q') return (dr === 0 || dc === 0 || adr === adc) && pathClear(r, c, tr, tc);
+  if (type === 'k') return adr <= 1 && adc <= 1;
+  return false;
+}
+function pathClear(r, c, tr, tc) {
+  const dr = Math.sign(tr - r), dc = Math.sign(tc - c);
+  let nr = r + dr, nc = c + dc;
+  while (nr !== tr || nc !== tc) { if (board[nr][nc]) return false; nr += dr; nc += dc; }
+  return true;
+}
+
+// ===== كش مات / تعادل =====
+function isCheckmate(color) { return isInCheck(color) && !hasAnyMove(color); }
+function isStalemate(color) { return !isInCheck(color) && !hasAnyMove(color); }
+function hasAnyMove(color) {
+  const isW = color === 'white';
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = board[r][c];
+    if (!p || (p === p.toUpperCase()) !== isW) continue;
+    if (getPossibleMoves(r, c).length > 0) return true;
+  }
+  return false;
+}
+
+// ===== كمبيوتر ذكي (Minimax) =====
+function evaluateBoard() {
+  let score = 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = board[r][c];
+    if (!p) continue;
+    const isWhite = p === p.toUpperCase();
+    const val = pieceValues[p.toLowerCase()] || 0;
+    score += isWhite ? val : -val;
+  }
+  return score;
+}
+function getAllMoves(color) {
+  const isW = color === 'white';
+  const moves = [];
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = board[r][c];
+    if (!p || (p === p.toUpperCase()) !== isW) continue;
+    for (const [nr, nc] of getPossibleMoves(r, c)) moves.push({ from: [r, c], to: [nr, nc] });
+  }
+  return moves;
+}
+function simulateMove(move, color) {
+  const from = move.from, to = move.to;
+  const moving = board[from[0]][from[1]];
+  const captured = board[to[0]][to[1]];
+  const promoted = (moving === 'P' && to[0] === 0) || (moving === 'p' && to[0] === 7);
+  board[to[0]][to[1]] = promoted ? (color === 'white' ? 'Q' : 'q') : moving;
+  board[from[0]][from[1]] = '';
+  return { captured, promoted, moving };
+}
+function undoMove(move, state) {
+  board[move.from[0]][move.from[1]] = state.moving;
+  board[move.to[0]][move.to[1]] = state.captured;
+}
+function minimax(depth, alpha, beta, isMaximizing) {
+  if (depth === 0) return evaluateBoard();
+  const color = isMaximizing ? 'white' : 'black';
+  const moves = getAllMoves(color);
+  if (moves.length === 0) {
+    if (isInCheck(color)) return isMaximizing ? -99999 : 99999;
+    return 0;
+  }
+  if (isMaximizing) {
+    let best = -Infinity;
+    for (const m of moves) {
+      const state = simulateMove(m, color);
+      const score = minimax(depth - 1, alpha, beta, false);
+      undoMove(m, state);
+      if (score > best) best = score;
+      alpha = Math.max(alpha, score);
+      if (beta <= alpha) break;
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for (const m of moves) {
+      const state = simulateMove(m, color);
+      const score = minimax(depth - 1, alpha, beta, true);
+      undoMove(m, state);
+      if (score < best) best = score;
+      beta = Math.min(beta, score);
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+}
+function computerMove() {
+  if (gameOver) return;
+  const moves = getAllMoves('black');
+  if (moves.length === 0) return;
+  let bestMove = moves[0];
+  let bestScore = Infinity;
+  const alpha = -Infinity, beta = Infinity;
+  for (const m of moves) {
+    const state = simulateMove(m, 'black');
+    const score = minimax(2, alpha, beta, true) + Math.random() * 5;
+    undoMove(m, state);
+    if (score < bestScore) { bestScore = score; bestMove = m; }
+  }
+  makeMove(bestMove.from[0], bestMove.from[1], bestMove.to[0], bestMove.to[1]);
+  drawBoard();
+  if (isCheckmate('white')) endGame('black', 'كش مات!');
+  else if (isStalemate('white')) endGame(null, 'تعادل');
+}
+
+// ===== المؤقت =====
+function startTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    if (gameOver) return;
+    if (currentTimer === 'white') { whiteTime--; if (whiteTime <= 0) { whiteTime = 0; endGame('black', 'انتهى الوقت!'); } }
+    else { blackTime--; if (blackTime <= 0) { blackTime = 0; endGame('white', 'انتهى الوقت!'); } }
+    updateTimers();
+  }, 1000);
+}
+function updateTimers() {
+  const fmt = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+  const bt = document.getElementById('bottom-timer');
+  const tt = document.getElementById('top-timer');
+  bt.textContent = fmt(whiteTime);
+  tt.textContent = fmt(blackTime);
+  bt.className = 'timer' + (whiteTime <= 60 ? ' danger' : whiteTime <= 180 ? ' warning' : '');
+  tt.className = 'timer' + (blackTime <= 60 ? ' danger' : blackTime <= 180 ? ' warning' : '');
+}
+function updatePlayerBars() {
+  document.getElementById('bottom-player').classList.toggle('active', turn === 'white');
+  document.getElementById('top-player').classList.toggle('active', turn === 'black');
+}
+
+// ===== نهاية اللعبة =====
+function endGame(winner, message) {
+  gameOver = true;
+  if (timerInterval) clearInterval(timerInterval);
+  if (winner === 'white') soundWin();
+  else if (winner === 'black' && gameMode === '1player') soundLose();
+  else if (winner) soundWin();
+  document.getElementById('winner-title').textContent = winner ? 'CHECKMATE!' : 'تعادل';
+  let txt = message;
+  if (winner === 'white') txt = `🏆 فاز ${gameMode === '1player' ? 'Elwan' : 'الأبيض'}!`;
+  else if (winner === 'black') txt = `🏆 فاز ${gameMode === '1player' ? 'الكمبيوتر' : 'الأسود'}!`;
+  document.getElementById('winner-text').textContent = txt;
+  document.getElementById('winner-overlay').classList.add('show');
+}
+
+// ===== إعادة =====
+function resetGame() {
+  board = JSON.parse(JSON.stringify(initialBoard));
+  selected = null; turn = 'white'; lastMove = null; gameOver = false;
+  whiteTime = 600; blackTime = 600; currentTimer = 'white';
+  document.getElementById('winner-overlay').classList.remove('show');
+  updateTimers(); drawBoard(); startTimer();
+}
+
+// ===== الإعدادات =====
+function openSettings() {
+  document.getElementById('settings-overlay').classList.add('show');
+  document.getElementById('btn-1player').classList.toggle('selected', gameMode === '1player');
+  document.getElementById('btn-2player').classList.toggle('selected', gameMode === '2player');
+}
+function closeSettings() { document.getElementById('settings-overlay').classList.remove('show'); }
+function setMode(m) { gameMode = m; closeSettings(); resetGame(); updateModeButton(); }
+function toggleMode() { gameMode = gameMode === '1player' ? '2player' : '1player'; resetGame(); updateModeButton(); }
+function updateModeButton() {
+  document.getElementById('mode-btn').textContent = gameMode === '1player' ? '🤖' : '👥';
+  document.getElementById('top-name').textContent = gameMode === '1player' ? 'الكمبيوتر' : 'اللاعب 2';
+  document.getElementById('top-avatar').textContent = gameMode === '1player' ? '🤖' : '👤';
+}
+
+// ===== تلميح =====
+function hint() {
+  if (gameOver || (gameMode === '1player' && turn === 'black')) return;
+  const moves = getAllMoves(turn);
+  if (moves.length === 0) return;
+  let best = moves[0], bestScore = -Infinity;
+  for (const m of moves) {
+    const state = simulateMove(m, turn);
+    const score = evaluateBoard() + Math.random() * 3;
+    undoMove(m, state);
+    if (score > bestScore) { bestScore = score; best = m; }
+  }
+  selected = best.from;
+  drawBoard();
+  showToast(`💡 ${'abcdefgh'[best.from[1]]}${8 - best.from[0]} → ${'abcdefgh'[best.to[1]]}${8 - best.to[0]}`);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ===== تسجيل Service Worker =====
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(() => console.log('✅ Service Worker مسجل'))
+      .catch((err) => console.log('❌ خطأ:', err));
+  });
+}
+
+// ===== البدء =====
+updateModeButton();
+drawBoard();
+updateTimers();
+</script>
+
+</body>
+</html>

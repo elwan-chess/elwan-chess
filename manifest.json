@@ -1,0 +1,26 @@
+{
+  "name": "Elwan Chess - شطرنج علوان",
+  "short_name": "Elwan Chess",
+  "description": "لعبة شطرنج عربية مع ذكاء اصطناعي",
+  "start_url": "./ElwanChess.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a1a2e",
+  "theme_color": "#d4af37",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "elwan_cover.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "elwan_cover.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
